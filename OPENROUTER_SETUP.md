@@ -71,6 +71,15 @@ Create a `.sparkling_water_providers.json` file in your home directory:
 
 ## Available OpenRouter Models
 
+### FREE Models (Recommended for Testing)
+
+| Model | ID | Cost | Context | Best For |
+|-------|-----|------|---------|----------|
+| Gemma 4 26B | `google/gemma-4-26b-a4b-it:free` | FREE | 262K | General coding, analysis |
+| Gemma 4 31B | `google/gemma-4-31b-it:free` | FREE | 262K | Complex tasks, reasoning |
+| Nemotron 3 Super | `nvidia/nemotron-3-super-120b-a12b:free` | FREE | 262K | Advanced reasoning |
+| Free Models Router | `openrouter/free` | FREE | 200K | Automatic routing |
+
 ### SLM (Small Language Models) - Fast & Cheap
 
 | Model | ID | Cost (per 1K tokens) | Context |
@@ -96,6 +105,17 @@ Create a `.sparkling_water_providers.json` file in your home directory:
 | Gemini Pro | `google/gemini-pro` | $0.0005 / $0.0015 | 32K |
 
 ## Recommended Configurations
+
+### FREE Setup (Recommended for Testing)
+
+```bash
+/config OpenRouter your-api-key-here
+/select OpenRouter google/gemma-4-26b-a4b-it:free medium
+```
+
+**Cost**: FREE! 🎉
+**Best for**: Testing, learning, personal projects
+**Note**: 28 free models available on OpenRouter
 
 ### Budget-Friendly Setup
 
@@ -160,7 +180,33 @@ Write a function to calculate fibonacci numbers
 
 ## Cost Estimation
 
-### Example: Codebase Analysis
+### Example: Codebase Analysis (Using FREE Models)
+
+**Task**: Analyze a 100-file codebase
+
+**Traditional Approach**:
+- Context: 412,000 tokens
+- Cost (GPT-4o): $2.06
+
+**Sparkling Water with OpenRouter FREE Models**:
+- Context: 3,400 tokens (99.2% reduction)
+- Cost: **$0.00** (FREE!)
+- **Savings**: 100% 🎉
+
+### Example: Code Generation (Using FREE Models)
+
+**Task**: Generate 10 functions
+
+**Traditional Approach**:
+- Context: 50,000 tokens
+- Cost (GPT-4o): $0.25
+
+**Sparkling Water with OpenRouter FREE Models**:
+- Context: 5,000 tokens (90% reduction)
+- Cost: **$0.00** (FREE!)
+- **Savings**: 100% 🎉
+
+### Example: Codebase Analysis (Using Paid Models)
 
 **Task**: Analyze a 100-file codebase
 
@@ -173,7 +219,7 @@ Write a function to calculate fibonacci numbers
 - Cost (GPT-4o Mini): $0.00255
 - **Savings**: 99.9%
 
-### Example: Code Generation
+### Example: Code Generation (Using Paid Models)
 
 **Task**: Generate 10 functions
 

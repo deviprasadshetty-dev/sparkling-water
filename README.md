@@ -248,20 +248,27 @@ sw select <primary_provider> <primary_model> [primary_tier] [secondary_provider]
 
 ### OpenRouter Setup (Recommended)
 
-OpenRouter provides access to multiple AI models through a single API:
+OpenRouter provides access to multiple AI models through a single API, including **28 FREE models**:
 
 ```bash
 # Get your API key from https://openrouter.ai/keys
 /config OpenRouter your-api-key-here
 
-# Select a model
-/select OpenRouter openai/gpt-4o-mini slm
+# Select a FREE model (recommended for testing)
+/select OpenRouter google/gemma-4-26b-a4b-it:free medium
 
 # Start using it
 Write a function to authenticate users
 ```
 
 **Popular OpenRouter Models:**
+
+**FREE Models:**
+- `google/gemma-4-26b-a4b-it:free` - FREE! (26B parameters)
+- `google/gemma-4-31b-it:free` - FREE! (31B parameters)
+- `nvidia/nemotron-3-super-120b-a12b:free` - FREE! (120B parameters)
+
+**Paid Models:**
 - `openai/gpt-4o-mini` - Fast & cheap (SLM)
 - `openai/gpt-4o` - Balanced performance (Medium)
 - `anthropic/claude-3.5-sonnet` - Maximum capability (Frontier)
