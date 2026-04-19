@@ -246,6 +246,28 @@ sw config <provider> <api_key>
 sw select <primary_provider> <primary_model> [primary_tier] [secondary_provider] [secondary_model] [secondary_tier]
 ```
 
+### OpenRouter Setup (Recommended)
+
+OpenRouter provides access to multiple AI models through a single API:
+
+```bash
+# Get your API key from https://openrouter.ai/keys
+/config OpenRouter your-api-key-here
+
+# Select a model
+/select OpenRouter openai/gpt-4o-mini slm
+
+# Start using it
+Write a function to authenticate users
+```
+
+**Popular OpenRouter Models:**
+- `openai/gpt-4o-mini` - Fast & cheap (SLM)
+- `openai/gpt-4o` - Balanced performance (Medium)
+- `anthropic/claude-3.5-sonnet` - Maximum capability (Frontier)
+
+For detailed setup instructions, see [OPENROUTER_SETUP.md](OPENROUTER_SETUP.md)
+
 ### Model Tiers
 
 - **SLM (Small Language Model)**: 1B-4B parameters, very fast, very low cost
