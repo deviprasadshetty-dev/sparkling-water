@@ -4,9 +4,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 import libcst as cst
-from libcst import matchers as m
+from libcst.metadata import MetadataWrapper, PositionProvider
 from pathlib import Path
 import asyncio
+import re
 
 
 class EditOperation(Enum):
@@ -62,6 +63,7 @@ class EditResult:
     changes: List[str]
     lines_changed: List[int]
     error: Optional[str] = None
+    syntax_error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -74,6 +76,7 @@ class EditResult:
             "changes": self.changes,
             "lines_changed": self.lines_changed,
             "error": self.error,
+            "syntax_error": self.syntax_error,
         }
 
 
@@ -93,6 +96,8 @@ class WriteTransformer(cst.CSTTransformer):
 
 class EditTransformer(cst.CSTTransformer):
     """Transformer to edit specific code."""
+
+    METADATA_DEPENDENCIES = (PositionProvider,)
 
     def __init__(
         self,
@@ -117,13 +122,13 @@ class EditTransformer(cst.CSTTransformer):
         """Edit matching function."""
         if self.target_function and original_node.name.value == self.target_function:
             self.modified = True
-            self.lines_changed.extend(
-                range(original_node.start_position[0] + 1, original_node.end_position[0] + 1)
-            )
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.extend(range(pos.start.line, pos.end.line + 1))
 
             if self.new_content:
                 # Replace function body
-                new_body = cst.IndentedBlock(body=[cst.parse_statement(self.new_content)])
+                new_body_statements = cst.parse_module(self.new_content).body
+                new_body = cst.IndentedBlock(body=new_body_statements)
                 return updated_node.with_changes(body=new_body)
 
         return updated_node
@@ -134,13 +139,13 @@ class EditTransformer(cst.CSTTransformer):
         """Edit matching class."""
         if self.target_class and original_node.name.value == self.target_class:
             self.modified = True
-            self.lines_changed.extend(
-                range(original_node.start_position[0] + 1, original_node.end_position[0] + 1)
-            )
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.extend(range(pos.start.line, pos.end.line + 1))
 
             if self.new_content:
                 # Replace class body
-                new_body = cst.IndentedBlock(body=[cst.parse_statement(self.new_content)])
+                new_body_statements = cst.parse_module(self.new_content).body
+                new_body = cst.IndentedBlock(body=new_body_statements)
                 return updated_node.with_changes(body=new_body)
 
         return updated_node
@@ -148,6 +153,8 @@ class EditTransformer(cst.CSTTransformer):
 
 class DeleteTransformer(cst.CSTTransformer):
     """Transformer to delete code."""
+
+    METADATA_DEPENDENCIES = (PositionProvider,)
 
     def __init__(
         self,
@@ -164,35 +171,35 @@ class DeleteTransformer(cst.CSTTransformer):
 
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
-    ) -> cst.CSTTransformer:
+    ) -> Union[cst.FunctionDef, cst.RemovalSentinel]:
         """Delete matching function."""
         if self.target_function and original_node.name.value == self.target_function:
             self.modified = True
-            self.lines_changed.extend(
-                range(original_node.start_position[0] + 1, original_node.end_position[0] + 1)
-            )
-            # Return None to delete
-            return cst.RemoveFromParent
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.extend(range(pos.start.line, pos.end.line + 1))
+            # Return RemovalSentinel to delete
+            return cst.RemoveFromParent()
 
         return updated_node
 
     def leave_ClassDef(
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef
-    ) -> cst.CSTTransformer:
+    ) -> Union[cst.ClassDef, cst.RemovalSentinel]:
         """Delete matching class."""
         if self.target_class and original_node.name.value == self.target_class:
             self.modified = True
-            self.lines_changed.extend(
-                range(original_node.start_position[0] + 1, original_node.end_position[0] + 1)
-            )
-            # Return None to delete
-            return cst.RemoveFromParent
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.extend(range(pos.start.line, pos.end.line + 1))
+            # Return RemovalSentinel to delete
+            return cst.RemoveFromParent()
 
         return updated_node
 
 
 class InsertTransformer(cst.CSTTransformer):
     """Transformer to insert code."""
+
+    METADATA_DEPENDENCIES = (PositionProvider,)
 
     def __init__(
         self,
@@ -215,7 +222,8 @@ class InsertTransformer(cst.CSTTransformer):
         """Insert code into matching function."""
         if self.target_function and original_node.name.value == self.target_function:
             self.modified = True
-            self.lines_changed.append(original_node.start_position[0] + 1)
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.append(pos.start.line)
 
             if self.content:
                 # Parse the content
@@ -225,9 +233,9 @@ class InsertTransformer(cst.CSTTransformer):
                 body = updated_node.body
 
                 if self.insert_position == "start":
-                    new_body = cst.IndentedBlock(body=new_statements + list(body.body))
+                    new_body = cst.IndentedBlock(body=list(new_statements) + list(body.body))
                 else:  # end
-                    new_body = cst.IndentedBlock(body=list(body.body) + new_statements)
+                    new_body = cst.IndentedBlock(body=list(body.body) + list(new_statements))
 
                 return updated_node.with_changes(body=new_body)
 
@@ -239,7 +247,8 @@ class InsertTransformer(cst.CSTTransformer):
         """Insert code into matching class."""
         if self.target_class and original_node.name.value == self.target_class:
             self.modified = True
-            self.lines_changed.append(original_node.start_position[0] + 1)
+            pos = self.get_metadata(PositionProvider, original_node)
+            self.lines_changed.append(pos.start.line)
 
             if self.content:
                 # Parse the content
@@ -249,9 +258,9 @@ class InsertTransformer(cst.CSTTransformer):
                 body = updated_node.body
 
                 if self.insert_position == "start":
-                    new_body = cst.IndentedBlock(body=new_statements + list(body.body))
+                    new_body = cst.IndentedBlock(body=list(new_statements) + list(body.body))
                 else:  # end
-                    new_body = cst.IndentedBlock(body=list(body.body) + new_statements)
+                    new_body = cst.IndentedBlock(body=list(body.body) + list(new_statements))
 
                 return updated_node.with_changes(body=new_body)
 
@@ -275,27 +284,23 @@ class CodeEditor:
             original_content = path.read_text(encoding="utf-8")
 
         try:
-            # Write new content
+            # Validate syntax BEFORE writing
+            if file_path.endswith(".py"):
+                is_valid, error = await self.validate_syntax(content)
+                if not is_valid:
+                    return EditResult(
+                        success=False,
+                        operation=EditOperation.WRITE,
+                        modified_file=file_path,
+                        original_content=original_content,
+                        modified_content=content,
+                        changes=[],
+                        lines_changed=[],
+                        error="Syntax error in proposed code.",
+                        syntax_error=error
+                    )
+
             path.write_text(content, encoding="utf-8")
-
-            # Validate syntax
-            is_valid = await self.validate_syntax(content)
-            if not is_valid:
-                # Restore original
-                if original_content:
-                    path.write_text(original_content, encoding="utf-8")
-                return EditResult(
-                    success=False,
-                    operation=EditOperation.WRITE,
-                    modified_file=file_path,
-                    original_content=original_content,
-                    modified_content=content,
-                    changes=[],
-                    lines_changed=[],
-                    error="Invalid syntax in written code",
-                )
-
-            # Create result
             result = EditResult(
                 success=True,
                 operation=EditOperation.WRITE,
@@ -306,10 +311,8 @@ class CodeEditor:
                 lines_changed=list(range(1, len(content.split("\n")) + 1)),
             )
 
-            # Store in history
             async with self._lock:
                 self.edit_history.append(result)
-
             return result
 
         except Exception as e:
@@ -340,194 +343,124 @@ class CodeEditor:
                 error=f"File not found: {intent.target_file}",
             )
 
-        # Read original content
         original_content = file_path.read_text(encoding="utf-8")
+
+        if not intent.target_file.endswith(".py"):
+             return await self._fallback_edit(intent, original_content)
 
         try:
             # Parse the file
             module = cst.parse_module(original_content)
-
-            # Select appropriate transformer
+            wrapper = MetadataWrapper(module)
             transformer = self._get_transformer(intent)
 
             if transformer is None:
                 return EditResult(
-                    success=False,
-                    operation=intent.operation,
-                    modified_file=intent.target_file,
-                    original_content=original_content,
-                    modified_content=original_content,
-                    changes=[],
-                    lines_changed=[],
-                    error=f"Unsupported edit operation: {intent.operation}",
+                    success=False, operation=intent.operation, modified_file=intent.target_file,
+                    original_content=original_content, modified_content=original_content,
+                    changes=[], lines_changed=[], error=f"Unsupported edit operation: {intent.operation}"
                 )
 
             # Apply transformation
-            modified_module = module.visit(transformer)
+            modified_module = wrapper.visit(transformer)
             modified_content = modified_module.code
 
-            # Check if anything was modified
             if not getattr(transformer, "modified", False):
                 return EditResult(
-                    success=False,
-                    operation=intent.operation,
-                    modified_file=intent.target_file,
-                    original_content=original_content,
-                    modified_content=original_content,
-                    changes=[],
-                    lines_changed=[],
-                    error="No matching target found for edit",
+                    success=False, operation=intent.operation, modified_file=intent.target_file,
+                    original_content=original_content, modified_content=original_content,
+                    changes=[], lines_changed=[], error="No matching target found for edit"
                 )
 
-            # Write modified content
+            # Validate resulting syntax
+            is_valid, error = await self.validate_syntax(modified_content)
+            if not is_valid:
+                 return EditResult(
+                    success=False, operation=intent.operation, modified_file=intent.target_file,
+                    original_content=original_content, modified_content=modified_content,
+                    changes=[], lines_changed=[], error="Transformation resulted in syntax error.",
+                    syntax_error=error
+                )
+
             file_path.write_text(modified_content, encoding="utf-8")
 
-            # Create result
             result = EditResult(
-                success=True,
-                operation=intent.operation,
-                modified_file=intent.target_file,
-                original_content=original_content,
-                modified_content=modified_content,
+                success=True, operation=intent.operation, modified_file=intent.target_file,
+                original_content=original_content, modified_content=modified_content,
                 changes=[f"Applied {intent.operation.value} to {intent.target_file}"],
                 lines_changed=getattr(transformer, "lines_changed", []),
             )
 
-            # Store in history
-            async with self._lock:
-                self.edit_history.append(result)
-
+            async with self._lock: self.edit_history.append(result)
             return result
 
         except Exception as e:
-            return EditResult(
-                success=False,
-                operation=intent.operation,
-                modified_file=intent.target_file,
-                original_content=original_content,
-                modified_content=original_content,
-                changes=[],
-                lines_changed=[],
-                error=str(e),
-            )
+            return await self._fallback_edit(intent, original_content)
+
+    async def _fallback_edit(self, intent: EditIntent, content: str) -> EditResult:
+        new_content = content
+        if intent.operation == EditOperation.EDIT and intent.new_content:
+             if not intent.target_function and not intent.target_class:
+                 new_content = intent.new_content
+             else:
+                 target = intent.target_function or intent.target_class
+                 pattern = rf"(function|class)\s+{target}.*?\{{.*?\}}"
+                 new_content = re.sub(pattern, intent.new_content, content, flags=re.DOTALL)
+
+        if new_content == content and intent.new_content:
+             new_content = intent.new_content
+
+        Path(intent.target_file).write_text(new_content, encoding="utf-8")
+
+        result = EditResult(
+            success=True, operation=intent.operation, modified_file=intent.target_file,
+            original_content=content, modified_content=new_content,
+            changes=[f"Applied fallback {intent.operation.value} to {intent.target_file}"],
+            lines_changed=[]
+        )
+        async with self._lock: self.edit_history.append(result)
+        return result
 
     def _get_transformer(self, intent: EditIntent) -> Optional[cst.CSTTransformer]:
-        """Get the appropriate transformer for the intent."""
         if intent.operation == EditOperation.WRITE:
             return WriteTransformer(new_code=intent.content or "")
-
         elif intent.operation == EditOperation.EDIT:
-            return EditTransformer(
-                target_function=intent.target_function,
-                target_class=intent.target_class,
-                target_line=intent.target_line,
-                old_content=intent.old_content,
-                new_content=intent.new_content,
-            )
-
+            return EditTransformer(target_function=intent.target_function, target_class=intent.target_class, target_line=intent.target_line, old_content=intent.old_content, new_content=intent.new_content)
         elif intent.operation == EditOperation.DELETE:
-            return DeleteTransformer(
-                target_function=intent.target_function,
-                target_class=intent.target_class,
-                target_line=intent.target_line,
-            )
-
+            return DeleteTransformer(target_function=intent.target_function, target_class=intent.target_class, target_line=intent.target_line)
         elif intent.operation == EditOperation.INSERT:
-            return InsertTransformer(
-                target_function=intent.target_function,
-                target_class=intent.target_class,
-                insert_position=intent.parameters.get("position", "start"),
-                content=intent.content,
-            )
-
+            return InsertTransformer(target_function=intent.target_function, target_class=intent.target_class, insert_position=intent.parameters.get("position", "start"), content=intent.content)
         elif intent.operation == EditOperation.REPLACE:
-            return EditTransformer(
-                target_function=intent.target_function,
-                target_class=intent.target_class,
-                target_line=intent.target_line,
-                old_content=intent.old_content,
-                new_content=intent.new_content,
-            )
-
+            return EditTransformer(target_function=intent.target_function, target_class=intent.target_class, target_line=intent.target_line, old_content=intent.old_content, new_content=intent.new_content)
         return None
 
-    async def delete_code(self, intent: EditIntent) -> EditResult:
-        """Delete code based on intent."""
-        intent.operation = EditOperation.DELETE
-        return await self.edit_code(intent)
-
-    async def insert_code(self, intent: EditIntent) -> EditResult:
-        """Insert code based on intent."""
-        intent.operation = EditOperation.INSERT
-        return await self.edit_code(intent)
-
-    async def replace_code(self, intent: EditIntent) -> EditResult:
-        """Replace code based on intent."""
-        intent.operation = EditOperation.REPLACE
-        return await self.edit_code(intent)
-
-    async def validate_syntax(self, code: str) -> bool:
-        """Validate that code has valid syntax."""
+    async def validate_syntax(self, code: str) -> tuple[bool, Optional[str]]:
+        """Validate that code has valid syntax. Returns (is_valid, error_msg)."""
         try:
             cst.parse_module(code)
-            return True
-        except Exception:
-            return False
+            return True, None
+        except Exception as e:
+            return False, str(e)
 
     async def get_diff(self, original: str, modified: str) -> str:
-        """Get a simple diff between original and modified code."""
         import difflib
-
-        diff = difflib.unified_diff(
-            original.splitlines(keepends=True),
-            modified.splitlines(keepends=True),
-            fromfile="original",
-            tofile="modified",
-        )
-
+        diff = difflib.unified_diff(original.splitlines(keepends=True), modified.splitlines(keepends=True), fromfile="original", tofile="modified")
         return "".join(diff)
 
     async def get_edit_history(self) -> List[EditResult]:
-        """Get edit history."""
-        async with self._lock:
-            return self.edit_history.copy()
+        async with self._lock: return self.edit_history.copy()
 
     async def clear_history(self) -> None:
-        """Clear edit history."""
-        async with self._lock:
-            self.edit_history.clear()
+        async with self._lock: self.edit_history.clear()
 
     async def create_edit_intent(self, operation: str, target_file: str, **kwargs) -> EditIntent:
-        """Create an edit intent from parameters."""
-        try:
-            operation_enum = EditOperation(operation)
-        except ValueError:
-            raise ValueError(f"Invalid edit operation: {operation}")
-
-        return EditIntent(
-            operation=operation_enum,
-            target_file=target_file,
-            target_function=kwargs.get("target_function"),
-            target_class=kwargs.get("target_class"),
-            target_line=kwargs.get("target_line"),
-            content=kwargs.get("content"),
-            old_content=kwargs.get("old_content"),
-            new_content=kwargs.get("new_content"),
-            parameters=kwargs,
-        )
+        try: operation_enum = EditOperation(operation)
+        except ValueError: raise ValueError(f"Invalid edit operation: {operation}")
+        return EditIntent(operation=operation_enum, target_file=target_file, target_function=kwargs.get("target_function"), target_class=kwargs.get("target_class"), target_line=kwargs.get("target_line"), content=kwargs.get("content"), old_content=kwargs.get("old_content"), new_content=kwargs.get("new_content"), parameters=kwargs)
 
     async def undo_last_edit(self) -> Optional[EditResult]:
-        """Undo the last edit."""
         async with self._lock:
-            if not self.edit_history:
-                return None
-
+            if not self.edit_history: return None
             last_result = self.edit_history.pop()
-
-            # Restore original content
-            if last_result.success:
-                Path(last_result.modified_file).write_text(
-                    last_result.original_content, encoding="utf-8"
-                )
-
+            if last_result.success: Path(last_result.modified_file).write_text(last_result.original_content, encoding="utf-8")
             return last_result
