@@ -13,6 +13,9 @@ class EventType(Enum):
 
     TASK_REQUESTED = "task.requested"
     TASK_STARTED = "task.started"
+    PLAN_CREATED = "plan.created"
+    TOOL_CALL = "tool.call"
+    TOOL_RESULT = "tool.result"
     TASK_COMPLETED = "task.completed"
     TASK_FAILED = "task.failed"
     FILE_MODIFIED = "file.modified"
@@ -75,16 +78,6 @@ class EventBus:
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def _safe_call(self, handler: Callable, event: Event) -> None:
-        """Safely call event handler."""
-        try:
-            if asyncio.iscoroutinefunction(handler):
-                await handler(event)
-            else:
-                handler(event)
-        except Exception as e:
-            print(f"Error in event handler: {e}")
 
     async def get_event_log(self, limit: Optional[int] = None) -> List[Event]:
         """Get event log with optional limit."""
@@ -201,3 +194,9 @@ class Orchestrator:
         """Get list of active sagas."""
         async with self._lock:
             return list(self.active_sagas.values())
+
+    async def publish_event(self, event_type: EventType, data: Dict[str, Any], correlation_id: Optional[str] = None):
+        """Helper to publish an event."""
+        await self.event_bus.publish(
+            Event(type=event_type, data=data, correlation_id=correlation_id)
+        )

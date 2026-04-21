@@ -421,6 +421,16 @@ def chat(path: str):
     asyncio.run(run_chat())
 
 
+
+@cli.command()
+@click.argument("path", default=".", type=click.Path(exists=True))
+def tui(path: str):
+    """Launch modern TUI (Breakthrough mode)."""
+    from ..tui.app import SparklingWaterTUI
+    app = SparklingWaterTUI(path)
+    app.run()
+
+
 @cli.command()
 def demo():
     """Run a demo showcasing Sparkling Water capabilities."""

@@ -242,3 +242,5 @@ htmlcov/
 *.pid
 *.seed
 *.pid.lock
+# Sparkling Water
+.sw/

@@ -6,8 +6,8 @@ from enum import Enum
 import json
 import asyncio
 from datetime import datetime
-from openai import AsyncOpenAI
-from anthropic import AsyncAnthropic
+from ..providers.manager import ProviderManager
+from ..providers.base import ModelTier
 
 
 class TaskType(Enum):
@@ -21,13 +21,6 @@ class TaskType(Enum):
     ARCHITECTURE_ANALYSIS = "architecture_analysis"
     FILE_OPERATION = "file_operation"
     UNKNOWN = "unknown"
-
-
-class ModelTier(Enum):
-    """Model tiers for routing."""
-
-    SLM = "slm"  # Small Language Model (1B-4B)
-    FRONTIER = "frontier"  # Large Frontier Model (GPT-4, Claude)
 
 
 @dataclass
@@ -79,19 +72,8 @@ class RoutingDecision:
 class SLMRouter:
     """SLM-based router for task classification and routing."""
 
-    def __init__(
-        self,
-        slm_api_key: Optional[str] = None,
-        slm_model: str = "gpt-4o-mini",
-        frontier_api_key: Optional[str] = None,
-        frontier_model: str = "claude-3-5-sonnet-20241022",
-    ):
-        self.slm_client = AsyncOpenAI(api_key=slm_api_key) if slm_api_key else None
-        self.frontier_client = (
-            AsyncAnthropic(api_key=frontier_api_key) if frontier_api_key else None
-        )
-        self.slm_model = slm_model
-        self.frontier_model = frontier_model
+    def __init__(self, provider_manager: Optional[ProviderManager] = None):
+        self.provider_manager = provider_manager or ProviderManager()
         self.routing_history: List[RoutingDecision] = []
         self._lock = asyncio.Lock()
 
@@ -171,13 +153,14 @@ class SLMRouter:
                 if pattern in description_lower:
                     return task_type
 
-        # If SLM is available, use it for classification
-        if self.slm_client:
+        # If primary provider is available, use it for classification
+        if self.provider_manager.get_primary_provider():
             try:
                 task_type = await self._slm_classify(description, context)
                 return task_type
             except Exception as e:
-                print(f"SLM classification failed: {e}, falling back to heuristic")
+                # print(f"SLM classification failed: {e}, falling back to heuristic")
+                pass
 
         return TaskType.UNKNOWN
 
@@ -201,8 +184,8 @@ Respond with only the category name (e.g., "code_generation").
 """
 
         try:
-            response = await self.slm_client.chat.completions.create(
-                model=self.slm_model,
+            # We want to use the primary model (often an SLM) for classification
+            response = await self.provider_manager.chat_completion(
                 messages=[
                     {"role": "system", "content": "You are a task classifier for a coding agent."},
                     {"role": "user", "content": prompt},
@@ -211,7 +194,7 @@ Respond with only the category name (e.g., "code_generation").
                 max_tokens=50,
             )
 
-            result = response.choices[0].message.content.strip().lower()
+            result = response.strip().lower()
 
             # Map result to TaskType
             for task_type in TaskType:
@@ -219,8 +202,7 @@ Respond with only the category name (e.g., "code_generation").
                     return task_type
 
             return TaskType.UNKNOWN
-        except Exception as e:
-            print(f"SLM classification error: {e}")
+        except Exception:
             return TaskType.UNKNOWN
 
     async def route_task(self, task: Task) -> RoutingDecision:
@@ -288,51 +270,23 @@ Respond with only the category name (e.g., "code_generation").
 
         return False
 
-    async def execute_with_slm(self, task: Task, prompt: str) -> str:
-        """Execute a task using SLM."""
-        if not self.slm_client:
-            raise RuntimeError("SLM client not configured")
-
-        try:
-            response = await self.slm_client.chat.completions.create(
-                model=self.slm_model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful coding assistant."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=min(2000, task.estimated_tokens + 500),
-            )
-
-            return response.choices[0].message.content
-        except Exception as e:
-            raise RuntimeError(f"SLM execution failed: {e}")
-
-    async def execute_with_frontier(self, task: Task, prompt: str) -> str:
-        """Execute a task using frontier model."""
-        if not self.frontier_client:
-            raise RuntimeError("Frontier client not configured")
-
-        try:
-            response = await self.frontier_client.messages.create(
-                model=self.frontier_model,
-                max_tokens=min(4096, task.estimated_tokens + 1000),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-            )
-
-            return response.content[0].text
-        except Exception as e:
-            raise RuntimeError(f"Frontier execution failed: {e}")
-
     async def execute_task(self, task: Task, prompt: str) -> str:
-        """Execute a task using the appropriate model."""
+        """Execute a task using the appropriate model tier."""
         decision = await self.route_task(task)
 
-        if decision.model_tier == ModelTier.SLM:
-            return await self.execute_with_slm(task, prompt)
-        else:
-            return await self.execute_with_frontier(task, prompt)
+        # Use secondary (Frontier) model if decision is FRONTIER
+        use_secondary = decision.model_tier == ModelTier.FRONTIER
+
+        # If secondary is not configured, it will fall back to primary in chat_completion
+        return await self.provider_manager.chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a helpful coding assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            use_secondary=use_secondary,
+            max_tokens=min(4096, task.estimated_tokens + 1000),
+            temperature=0.3
+        )
 
     async def get_routing_stats(self) -> Dict[str, Any]:
         """Get routing statistics."""
