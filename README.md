@@ -23,34 +23,27 @@
 
 ## 📦 Single-Command Installation
 
-The recommended way to install Sparkling Water is via our professional installation script:
-
+### Linux / macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/your-org/sparkling-water/main/install.sh | bash
 ```
 
-Alternatively, you can install via pip:
-
-```bash
-pip install sparkling-water
+### Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/your-org/sparkling-water/main/install.ps1 | iex
 ```
 
-Or for development:
-
+### Development
 ```bash
-git clone https://github.com/your-org/sparkling-water.git && cd sparkling-water && ./install.sh
+git clone https://github.com/your-org/sparkling-water.git && cd sparkling-water && pip install -e .
 ```
 
 ## 💬 Usage
 
 ### Modern TUI (Default)
-Launch the breakthrough TUI for a professional, multi-pane experience by simply running:
+Launch the breakthrough TUI for a professional, multi-pane experience:
 ```bash
 sw
-```
-Or specify a path:
-```bash
-sw ./my-project
 ```
 
 ### Interactive Chat (Legacy)
