@@ -28,6 +28,7 @@ from ..graph.knowledge_graph import KnowledgeGraph
 from ..vfs.virtual_filesystem import VirtualFileSystem
 from ..router.slm_router import SLMRouter, Task, TaskType
 from ..router.tools import TOOLS
+from ..core.ast_transformer import ASTTransformationEngine
 from ..core.code_editor import CodeEditor
 from ..core.project import ProjectManager
 from ..providers import ProviderManager, ModelTier
@@ -88,18 +89,26 @@ class SparklingWaterTUI(App):
                         with Vertical(id="chat-container"):
                             yield RichLog(id="chat-log", wrap=True, highlight=True, markup=True)
                             with Horizontal(id="input-container"):
-                                yield Input(placeholder="Ask Sparkling Water...", id="user-input")
+                                yield Input(placeholder="Ask anything... Use @file to link context.", id="user-input")
                     with TabPane("📋 Plan", id="plan-tab"):
                         yield Static("No active plan.", id="plan-pane")
                     with TabPane("🔍 Diff", id="diff-tab"):
                         yield Static("No pending changes.", id="diff-pane")
                     with TabPane("🌐 Web", id="search-tab"):
-                         yield Static("Web search results will appear here.", id="search-pane")
+                         yield Static("Web results.", id="search-pane")
         yield Static("Ready", id="status-bar")
         yield Footer()
 
     async def on_mount(self) -> None:
-        self.query_one("#chat-log").write("[bold blue]✨ Sparkling Water Breakthrough initialized.[/bold blue]")
+        log = self.query_one("#chat-log")
+        log.write("[bold cyan]✨ Sparkling Water Breakthrough v1.0[/bold cyan]")
+        log.write("[dim]The next-generation agentic coding environment.[/dim]\n")
+        log.write("🚀 [bold]Getting started:[/bold]")
+        log.write("  • Type naturally to start a task")
+        log.write("  • Use [cyan]@filename[/cyan] to link specific file context")
+        log.write("  • Check the [bold]Plan[/bold] tab for the agent's strategy")
+        log.write("  • Review changes in the [bold]Diff[/bold] tab\n")
+
         try:
             models = await self.provider_manager.get_all_models()
             options = [(f"{p}: {m.name}", f"{p}:{m.id}") for p, ml in models.items() for m in ml]
@@ -111,7 +120,7 @@ class SparklingWaterTUI(App):
     async def auto_index(self):
         self.update_status("Indexing...")
         await self.knowledge_graph.initialize()
-        files = list(self.codebase_path.rglob("*.py"))
+        files = list(self.codebase_path.rglob("*.py")) + list(self.codebase_path.rglob("*.js")) + list(self.codebase_path.rglob("*.ts"))
         for f in files:
             try: await self.knowledge_graph.index_file(str(f), f.read_text(encoding="utf-8"))
             except: pass
@@ -125,7 +134,7 @@ class SparklingWaterTUI(App):
         tree = self.query_one("#file-tree")
         tree.clear()
         for item in sorted(self.codebase_path.iterdir()):
-            if item.name.startswith('.'): continue
+            if item.name.startswith('.') and item.name != ".sw": continue
             if item.is_dir(): tree.root.add(item.name, expand=False)
             else: tree.root.add_leaf(item.name)
 
@@ -139,7 +148,16 @@ class SparklingWaterTUI(App):
         self.run_worker(self.agent_loop(user_input))
 
     async def agent_loop(self, user_input: str):
-        self.chat_history.append({"role": "user", "content": user_input})
+        # Resolve @file mentions for instant context
+        mentions = re.findall(r"@([\w\.\-/]+)", user_input)
+        context_addition = ""
+        for m in mentions:
+             try:
+                 content = await self.vfs.read_file(m)
+                 context_addition += f"\n\nContext from @{m}:\n```\n{content}\n```"
+             except: pass
+
+        self.chat_history.append({"role": "user", "content": user_input + context_addition})
         selected = self.query_one("#model-select").value
         force_p = force_m = None
         if selected and ":" in selected: force_p, force_m = selected.split(":", 1)
@@ -236,7 +254,7 @@ class SparklingWaterTUI(App):
 2. PLAN: State PLAN.
 3. EXECUTE: JSON block for tool.
 4. VERIFY: Read/Test.
-Be brief, fast, and token-efficient. Use save_knowledge for project details.
+Be brief, fast, and token-efficient. User can mention @file to provide instant context.
 """
 
     def action_clear_chat(self): self.query_one("#chat-log").clear(); self.chat_history = []

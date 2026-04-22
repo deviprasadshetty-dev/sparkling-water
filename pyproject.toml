@@ -39,6 +39,7 @@ dependencies = [
     "textual>=0.40.0",
     "python-dotenv>=1.0.0",
     "prompt-toolkit>=3.0.0",
+    "duckduckgo-search",
 ]
 
 [project.optional-dependencies]

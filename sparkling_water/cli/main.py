@@ -22,15 +22,21 @@ from ..core.ast_transformer import ASTTransformationEngine, TransformationIntent
 console = Console()
 
 
-@click.group()
+@click.group(invoke_without_command=True)
+@click.pass_context
 @click.version_option(version="0.1.0")
-def cli():
+@click.argument("path", default=".", type=click.Path(exists=True))
+def cli(ctx, path: str):
     """Sparkling Water - Next-Generation CLI Coding Agent
 
     A modern, event-driven coding agent with AST-based intelligence,
     SLM routing, and surgical code modifications.
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        # Default to TUI
+        from ..tui.app import SparklingWaterTUI
+        app = SparklingWaterTUI(path)
+        app.run()
 
 
 @cli.command()
@@ -410,7 +416,7 @@ def benchmark(path: str, db: str):
 @cli.command()
 @click.argument("path", default=".", type=click.Path(exists=True))
 def chat(path: str):
-    """Launch interactive AI assistant (default mode)."""
+    """Launch interactive AI assistant (legacy chat mode)."""
     import asyncio
     from .interactive import SparklingWaterCLI
 
@@ -419,7 +425,6 @@ def chat(path: str):
         await cli.run()
 
     asyncio.run(run_chat())
-
 
 
 @cli.command()
@@ -451,11 +456,11 @@ def demo():
     console.print("  • Surgical code modifications")
 
     console.print("\n[bold]Quick Start:[/bold]")
-    console.print("  Just run: [cyan]sw chat[/cyan] or [cyan]sw[/cyan]")
+    console.print("  Just run: [cyan]sw[/cyan]")
     console.print("  I'll automatically analyze your codebase and help you!")
 
     console.print("\n[bold]Example:[/bold]")
-    console.print("  $ sw chat ./myproject")
+    console.print("  $ sw ./myproject")
     console.print("  $ sw  # Uses current directory")
 
 
