@@ -23,28 +23,31 @@
 
 ## 📦 Single-Command Installation
 
-Install Sparkling Water and all its breakthrough features with a single command:
-
+### Linux / macOS
 ```bash
-pip install sparkling-water
+curl -fsSL https://raw.githubusercontent.com/deviprasadshetty-dev/sparkling-water/main/install.sh | bash
 ```
 
-Or for development:
+### Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/deviprasadshetty-dev/sparkling-water/main/install.ps1 | iex
+```
 
+### Development
 ```bash
-git clone https://github.com/your-org/sparkling-water.git && cd sparkling-water && pip install -e .
+git clone https://github.com/deviprasadshetty-dev/sparkling-water.git && cd sparkling-water && pip install -e .
 ```
 
 ## 💬 Usage
 
-### Modern TUI (Recommended)
+### Modern TUI (Default)
 Launch the breakthrough TUI for a professional, multi-pane experience:
 ```bash
-sw tui
+sw
 ```
 
-### Interactive Chat
-Start a conversation with the agent in your terminal:
+### Interactive Chat (Legacy)
+Start a conversation with the agent in legacy chat mode:
 ```bash
 sw chat
 ```
@@ -52,8 +55,8 @@ sw chat
 ## 🎓 Commands
 
 ```bash
-sw tui [path]      # Launch breakthrough TUI
-sw chat [path]     # Start interactive agent
+sw [path]          # Launch breakthrough TUI (default)
+sw chat [path]     # Start interactive legacy agent
 sw index [path]    # Build knowledge graph
 sw benchmark       # Compare efficiency
 ```
