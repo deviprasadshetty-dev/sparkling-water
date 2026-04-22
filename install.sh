@@ -16,8 +16,14 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Create a temporary directory for cloning
+TEMP_DIR=$(mktemp -d)
+echo -e "${BLUE}📦 Downloading Sparkling Water...${NC}"
+git clone https://github.com/deviprasadshetty-dev/sparkling-water.git "$TEMP_DIR"
+
 # Install Sparkling Water
 echo -e "${BLUE}📦 Installing and optimizing system...${NC}"
+cd "$TEMP_DIR"
 pip install -e .
 
 echo -e "\n${GREEN}✅ Installation Complete!${NC}"
