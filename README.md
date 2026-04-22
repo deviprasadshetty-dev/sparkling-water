@@ -25,17 +25,17 @@
 
 ### Linux / macOS
 ```bash
-curl -fsSL https://raw.githubusercontent.com/your-org/sparkling-water/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/deviprasadshetty-dev/sparkling-water/main/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/your-org/sparkling-water/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/deviprasadshetty-dev/sparkling-water/main/install.ps1 | iex
 ```
 
 ### Development
 ```bash
-git clone https://github.com/your-org/sparkling-water.git && cd sparkling-water && pip install -e .
+git clone https://github.com/deviprasadshetty-dev/sparkling-water.git && cd sparkling-water && pip install -e .
 ```
 
 ## 💬 Usage
